@@ -5,6 +5,7 @@
 // Replace with your network credentials
 const char* ssid = "Galaxy M211BF1";         
 const char* password = "pufy3612";
+// Select the Pin for the ultrasonic sensor
 const int trigPin = 14;
 const int echoPin = 12;
 long duration;
@@ -20,7 +21,6 @@ void setup(void)
 {
   //the HTML of the web page
   page = "<center><h1>Lift Control using Web Server</h1><body><p><a href=\"Forward\"><button>Ground Floor</button></a><p><a href=\"Backward\"><button>First Floor</button></a></p><p><a href=\"Left\"><button>Second Floor</button></a></p><a href=\"Stop\"><button>Stop</button></a></p></body></center>";
- 
   pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
   pinMode(echoPin, INPUT); // Sets the echoPin as an Input
   pinMode(D2, OUTPUT);   // inputs for motor 1
