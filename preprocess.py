@@ -22,8 +22,19 @@ def extract_thermal_frames(video_path):
     
     return np.array(frames)
 
+def enhance_thermal_frames(frames):
+    # Enhance contrast to improve feature detection for ODM
+    enhanced_frames = []
+    for frame in frames:
+        # Apply histogram equalization
+        enhanced = cv2.equalizeHist(frame)
+        # Optionally apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(enhanced)
+        enhanced_frames.append(enhanced)
+    return np.array(enhanced_frames)
+
 def normalize_thermal_data(frames):
-    # Normalize thermal data to [0, 1] for consistency
     min_val, max_val = frames.min(), frames.max()
     if max_val == min_val:
         raise ValueError("Thermal data has no variation (min == max).")
@@ -35,3 +46,10 @@ def save_processed_frames(frames, output_dir="output/"):
     for i, frame in enumerate(frames):
         cv2.imwrite(f"{output_dir}/frame_{i}.png", frame)
     print(f"Saved {len(frames)} processed frames to {output_dir}")
+
+def save_frames_for_odm(frames, output_dir="data/images/"):
+    os.makedirs(output_dir, exist_ok=True)
+    for i, frame in enumerate(frames):
+        # Save as JPEG for ODM compatibility
+        cv2.imwrite(f"{output_dir}/frame_{i}.jpg", frame)
+    print(f"Saved {len(frames)} frames for ODM to {output_dir}")
