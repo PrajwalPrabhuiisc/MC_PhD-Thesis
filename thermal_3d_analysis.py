@@ -1,8 +1,10 @@
 import numpy as np
 import open3d as o3d
 from scipy import stats
-from preprocess import extract_thermal_frames, normalize_thermal_data, save_processed_frames
+from subprocess import run
+from preprocess import extract_thermal_frames, enhance_thermal_frames, normalize_thermal_data, save_processed_frames, save_frames_for_odm
 from visualize import visualize_point_cloud
+import os
 
 # Statistical anomaly detection
 def detect_thermal_anomalies(frames):
@@ -18,25 +20,36 @@ def detect_thermal_anomalies(frames):
     
     return anomalies
 
-# Generate a synthetic 3D point cloud
-def generate_point_cloud():
-    # Since no point cloud file is available, generate a synthetic cube
-    print("Generating synthetic point cloud (cube shape)...")
-    points = []
-    for x in np.linspace(-1, 1, 50):
-        for y in np.linspace(-1, 1, 50):
-            for z in np.linspace(-1, 1, 50):
-                points.append([x, y, z])
-    points = np.array(points)
+# Generate point cloud using OpenDroneMap from thermal frames
+def generate_point_cloud(image_dir="data/images/", output_path="output/point_cloud.ply"):
+    print("Generating point cloud with OpenDroneMap...")
+    os.makedirs("output", exist_ok=True)
     
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points)
+    # Run ODM via Docker
+    run([
+        "docker", "run", "-ti", "--rm",
+        "-v", f"{os.path.abspath(image_dir)}:/code/images",
+        "-v", f"{os.path.abspath('output')}:/code/odm_output",
+        "opendronemap/odm",
+        "--project-path", "/code/odm_output",
+        "--images", "/code/images",
+        "--pc-quality", "medium",  # Adjust for better results with thermal data
+        "--feature-type", "sift"   # SIFT may work better for grayscale thermal images
+    ], check=True)
     
-    # Placeholder for loading a real point cloud in the future
-    # If you have a point cloud file (e.g., 'data/point_cloud.ply'), you can load it instead:
-    # pcd = o3d.io.read_point_cloud("data/point_cloud.ply")
-    # points = np.asarray(pcd.points)
+    # ODM typically outputs to 'odm_output/odm_georeferenced_model.ply'
+    odm_output_path = "output/odm_georeferenced_model.ply"
+    if not os.path.exists(odm_output_path):
+        raise FileNotFoundError("ODM failed to generate point cloud.")
     
+    # Load the point cloud
+    pcd = o3d.io.read_point_cloud(odm_output_path)
+    if not pcd.has_points():
+        raise ValueError("Loaded point cloud is empty.")
+    points = np.asarray(pcd.points)
+    
+    # Save to specified output path for consistency
+    o3d.io.write_point_cloud(output_path, pcd)
     return pcd, points
 
 # Map thermal anomalies to 3D point cloud
@@ -45,10 +58,14 @@ def map_anomalies_to_3d(points, anomalies, frames):
     anomaly_frame = anomalies[0]  # Use first frame for simplicity
     frame_h, frame_w = anomaly_frame.shape
     
+    # Scale points to match frame dimensions (assuming top-down alignment)
+    x_min, x_max = points[:, 0].min(), points[:, 0].max()
+    y_min, y_max = points[:, 1].min(), points[:, 1].max()
+    
     for i, point in enumerate(points):
         x, y, _ = point
-        u = int((x + 1) / 2 * frame_w)
-        v = int((y + 1) / 2 * frame_h)
+        u = int(((x - x_min) / (x_max - x_min)) * frame_w)
+        v = int(((y - y_min) / (y_max - y_min)) * frame_h)
         
         if 0 <= u < frame_w and 0 <= v < frame_h:
             if anomaly_frame[v, u] > 0:
@@ -61,11 +78,19 @@ def map_anomalies_to_3d(points, anomalies, frames):
 # Main pipeline
 def main():
     video_path = "data/thermal_video.mp4"
+    image_dir = "data/images/"
     
     try:
-        # Preprocess video
-        print("Extracting and normalizing thermal frames...")
+        # Preprocess video and prepare frames for ODM
+        print("Extracting thermal frames...")
         frames = extract_thermal_frames(video_path)
+        print("Enhancing frames for ODM...")
+        enhanced_frames = enhance_thermal_frames(frames)
+        print("Saving frames for ODM...")
+        save_frames_for_odm(enhanced_frames, image_dir)
+        
+        # Normalize frames for anomaly detection
+        print("Normalizing thermal frames...")
         normalized_frames = normalize_thermal_data(frames)
         save_processed_frames(normalized_frames)
         
@@ -73,9 +98,9 @@ def main():
         print("Detecting thermal anomalies...")
         anomalies = detect_thermal_anomalies(normalized_frames)
         
-        # Generate point cloud
-        print("Generating 3D point cloud...")
-        pcd, points = generate_point_cloud()
+        # Generate point cloud with ODM
+        print("Generating 3D point cloud with OpenDroneMap...")
+        pcd, points = generate_point_cloud(image_dir)
         
         # Map anomalies to 3D
         print("Mapping anomalies to 3D point cloud...")
