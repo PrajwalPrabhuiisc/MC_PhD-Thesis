@@ -4,10 +4,8 @@ from mesa import Agent, Model
 from mesa.time import SimultaneousActivation
 from mesa.datacollection import DataCollector
 from scipy import stats
-import uuid
 import itertools
 import random
-import math
 
 # Constants
 NUM_DIRECTORS = 3
@@ -48,6 +46,7 @@ ROLE_BASE_MULTIPLIERS = {
     "Director": {"P": 1.2, "C": 1.2, "J": 1.0}
 }
 
+
 class MentalModel:
     def __init__(self):
         self.values = np.random.uniform(0.4, 0.6, 5)
@@ -64,6 +63,7 @@ class MentalModel:
         norm = np.linalg.norm(self.values) * np.linalg.norm(other_model)
         return np.dot(self.values, other_model) / norm if norm != 0 else 0
 
+
 class SituationalAwareness:
     def __init__(self, scenario_components):
         self.perception = np.random.uniform(5, 15)
@@ -79,7 +79,7 @@ class SituationalAwareness:
         if len(self.scenario_components) == 1:
             comp = self.scenario_components[0]
             return base_components[comp] * self.component_strengths.get(comp, 1.0)
-        
+
         weighted_sum = 0
         total_weight = 0
         for comp1 in self.scenario_components:
@@ -101,6 +101,7 @@ class SituationalAwareness:
         self.sa = self._calculate_weighted_sa()
         self.sa = np.clip(self.sa, 0, 100)
 
+
 class Communication:
     def __init__(self, role, communication_prob, scenario_components, scenario_weights):
         self.role = role
@@ -110,7 +111,7 @@ class Communication:
         self.scenario_weights = scenario_weights
         self.message_history = []
         self.communication_effectiveness = np.random.uniform(0.7, 1.0)
-        self.successful_communications = 0  # Track successful communications
+        self.successful_communications = 0
 
     def generate_report(self, sa_components, information, sa, trust, threshold):
         if sa >= threshold and np.random.random() < self.communication_prob:
@@ -132,16 +133,16 @@ class Communication:
             if len(self.message_history) > 10:
                 self.message_history.pop(0)
                 self.communication_effectiveness = min(1.0, self.communication_effectiveness + 0.01)
-            self.successful_communications += 1  # Increment on successful report
+            self.successful_communications += 1
             return np.clip(report, 0, 1)
         return None
 
     def receive_message(self, message, sender_competence):
         if message is not None:
             noise = np.random.normal(0, NOISE_STD["communication"], 5)
-            # Weight message by sender's competence
             processed_message = np.clip(message * sender_competence + noise, 0, 1)
             self.messages.append(processed_message)
+
 
 class OrgAgent(Agent):
     def __init__(self, unique_id, model, role, scenario_components, scenario_weights):
@@ -149,14 +150,14 @@ class OrgAgent(Agent):
         self.role = role
         self.scenario_components = scenario_components
         self.scenario_weights = scenario_weights
-        self.trust = {}  # Dictionary to track trust in other agents
+        self.trust = {}
         self.communication_prob = np.random.uniform(0.75, 0.95)
         self.task_familiarity = np.random.uniform(0.5, 0.9)
         self.workload = np.random.uniform(0.5, 3.5)
         self.fatigue = np.random.uniform(0.1, 0.7)
         self.competence_level = np.random.uniform(0.6, 0.9)
         self.detection_accuracy = DETECTION_ACCURACY[role]
-        self.role_clarity = np.random.uniform(0.5, 0.8)  # Phase 2: Dynamic role clarity
+        self.role_clarity = np.random.uniform(0.5, 0.8)
         self.component_competence = {comp: ROLE_BASE_MULTIPLIERS[role][comp] * np.random.uniform(0.8, 1.2) for comp in ["P", "C", "J"]}
         self.mental_model = MentalModel()
         self.sa = SituationalAwareness(scenario_components)
@@ -164,11 +165,7 @@ class OrgAgent(Agent):
         self.information = np.random.uniform(0.3, 0.9, 5)
         self.initial_sa = self.sa.sa
         self.scenario_learning_modifier = 1.0 + 0.1 * len(scenario_components)
-        self.reporting_threshold = REPORTING_THRESHOLD[role]  # Phase 3: Adaptive threshold
-        # Initialize trust network
-        for agent in model.schedule.agents:
-            if agent != self:
-                self.trust[agent.unique_id] = np.random.uniform(0.6, 0.95)
+        self.reporting_threshold = REPORTING_THRESHOLD[role]
 
     def observe_event(self):
         severity = self.model.task_complexity
@@ -186,7 +183,6 @@ class OrgAgent(Agent):
                 self.sa.comprehension = min(self.sa.comprehension + final_gain, 100)
             elif component == "J":
                 self.sa.projection = min(self.sa.projection + final_gain, 100)
-        # Phase 2: Update role clarity based on experience
         self.role_clarity = min(1.0, self.role_clarity + 0.01 * len(self.scenario_components) * self.competence_level)
 
     def _calculate_base_gain(self, component, severity):
@@ -197,7 +193,7 @@ class OrgAgent(Agent):
         fatigue_penalty = 1.0 - (self.fatigue * 0.3)
         workload_penalty = 1.0 - (self.workload / 10.0)
         org_feedback = 1.0 + (self.model.avg_sa_change / 100.0) * 0.5
-        role_clarity_boost = 1.0 + self.role_clarity * 0.5  # Phase 2: Role clarity impact
+        role_clarity_boost = 1.0 + self.role_clarity * 0.5
         noise_std = 0.1 + 0.2 * self.fatigue
         noise = max(-0.3, min(0.3, np.random.normal(0, noise_std)))
         return base * severity * competence_modifier * detection_modifier * fatigue_penalty * workload_penalty * org_feedback * role_clarity_boost * (1 + noise)
@@ -220,26 +216,28 @@ class OrgAgent(Agent):
                 self.sa.projection = min(self.sa.projection + final_gain, 100)
 
     def update_trust(self, partner, message_success):
-        # Phase 2: Dynamic trust update based on communication success
         trust_change = 0.02 if message_success else -0.02
-        self.trust[partner.unique_id] = np.clip(self.trust[partner.unique_id] + trust_change, 0.1, 1.0)
+        self.trust[partner.unique_id] = np.clip(self.trust.get(partner.unique_id, 0.75) + trust_change, 0.1, 1.0)
 
     def communicate(self):
-        # Phase 3: Adaptive reporting threshold
         self.reporting_threshold = max(0.1, self.reporting_threshold - 0.01 * (self.sa.sa / 100.0) * self.role_clarity)
-        report = self.communication.generate_report(self.sa, self.information, self.sa.sa, np.mean(list(self.trust.values())), self.reporting_threshold)
+        report = self.communication.generate_report(
+            self.sa, self.information, self.sa.sa, np.mean(list(self.trust.values())), self.reporting_threshold
+        )
         if report is not None:
             partners = self.model.get_communication_partners(self)
-            # Phase 2: Skill-based deference - prioritize competent partners
-            partners = sorted(partners, key=lambda x: x.competence_level * self.trust[x.unique_id], reverse=True)[:5]
+            partners = sorted(
+                partners,
+                key=lambda x: x.competence_level * self.trust.get(x.unique_id, 0.75),
+                reverse=True
+            )[:5]
             for partner in partners:
                 partner.communication.receive_message(report, self.competence_level)
-                self.update_trust(partner, True)  # Update trust on successful communication
+                self.update_trust(partner, True)
             action_threshold = 30 + 10 * len(self.scenario_components)
             action = "ACT" if self.sa.sa > action_threshold else "ESCALATE"
             self.execute_action(action)
         else:
-            # Reduce trust for failed communications
             for partner in self.model.get_communication_partners(self):
                 self.update_trust(partner, False)
 
@@ -287,34 +285,43 @@ class OrgAgent(Agent):
             "Scenario_Components": len(self.scenario_components)
         }
 
+
 class OrgModel(Model):
     def __init__(self, scenario):
+        super().__init__()
         self.num_agents = NUM_AGENTS
         self.schedule = SimultaneousActivation(self)
         self.task_complexity = np.random.uniform(0.6, 0.9)
-        self.true_mental_model = np.ones(5) * 0.8
-        self.true_information = np.ones(5) * 0.9
-        self.scenario = scenario
         self.avg_sa_change = 0.0
         self.step_count = 0
+        self.scenario = scenario
         self.org_structure = np.zeros((NUM_AGENTS, NUM_AGENTS))
+
         roles = ["Director"] * NUM_DIRECTORS + ["Manager"] * NUM_MANAGERS + ["Worker"] * NUM_WORKERS
-        
-        # Phase 3: Dynamic communication structure
+
+        # Build org structure
         for i in range(NUM_AGENTS):
             for j in range(NUM_AGENTS):
                 if i != j:
                     if (roles[i] == "Worker" and roles[j] == "Manager") or \
                        (roles[i] == "Manager" and roles[j] in ["Worker", "Director"]) or \
                        (roles[i] == "Director" and roles[j] == "Manager"):
-                        self.org_structure[i, j] = np.random.uniform(0.5, 1.0)  # Weighted connections
+                        self.org_structure[i, j] = np.random.uniform(0.5, 1.0)
                     elif roles[i] == "Worker" and roles[j] == "Worker" and np.random.random() < 0.1:
                         self.org_structure[i, j] = np.random.uniform(0.2, 0.5)
 
+        # Create agents
         for i, role in enumerate(roles):
             agent = OrgAgent(i, self, role, SCENARIOS[scenario][role], SCENARIO_WEIGHTS[scenario][role])
             self.schedule.add(agent)
 
+        # Initialize trust after all agents exist
+        for agent in self.schedule.agents:
+            for other_agent in self.schedule.agents:
+                if other_agent != agent:
+                    agent.trust[other_agent.unique_id] = np.random.uniform(0.6, 0.95)
+
+        # Data collector
         self.datacollector = DataCollector(
             agent_reporters={
                 "Role": lambda a: a.role,
@@ -352,7 +359,6 @@ class OrgModel(Model):
         )
 
     def get_communication_partners(self, agent):
-        # Phase 3: Trust-driven and competence-based partner selection
         partners = []
         for other_agent in self.schedule.agents:
             if other_agent != agent:
@@ -365,7 +371,6 @@ class OrgModel(Model):
         return partners
 
     def update_communication_structure(self):
-        # Phase 3: Update org_structure based on trust and competence
         for i, agent in enumerate(self.schedule.agents):
             for j, other_agent in enumerate(self.schedule.agents):
                 if i != j:
@@ -377,7 +382,7 @@ class OrgModel(Model):
         self.step_count += 1
         self.datacollector.collect(self)
         self.schedule.step()
-        self.update_communication_structure()  # Phase 3: Dynamic structure update
+        self.update_communication_structure()
         try:
             agent_data = self.datacollector.get_agent_vars_dataframe()
             if not agent_data.empty and self.step_count > 1:
@@ -385,6 +390,7 @@ class OrgModel(Model):
                 self.avg_sa_change = np.mean(current_step_data["Delta_SA"])
         except (KeyError, IndexError):
             self.avg_sa_change = 0.0
+
 
 def perform_statistical_tests(scenario_data):
     stats_results = []
@@ -439,6 +445,7 @@ def perform_statistical_tests(scenario_data):
             })
     return pd.DataFrame(stats_results)
 
+
 if __name__ == "__main__":
     scenario_data = {s: None for s in SCENARIOS}
     summary_data = []
@@ -447,20 +454,20 @@ if __name__ == "__main__":
     print(f"Scenarios: {list(SCENARIOS.keys())}")
     print(f"Iterations per scenario: {NUM_ITERATIONS}")
     print(f"Steps per iteration: {NUM_STEPS}")
-    
+
     for scenario in SCENARIOS:
         print(f"\n{'='*50}")
         print(f"Running Scenario {scenario}")
         print(f"Components: {SCENARIOS[scenario]}")
         print(f"{'='*50}")
-        
+
         iteration_dfs = []
         scenario_sa_changes = []
-        
+
         for iteration in range(NUM_ITERATIONS):
             if iteration % 50 == 0:
                 print(f"  Progress: {iteration}/{NUM_ITERATIONS} iterations")
-                
+
             model = OrgModel(scenario)
             all_data = []
 
@@ -507,10 +514,10 @@ if __name__ == "__main__":
     print(f"\n{'='*60}")
     print("PERFORMING STATISTICAL ANALYSIS")
     print(f"{'='*60}")
-    
+
     stats_df = perform_statistical_tests(scenario_data)
     summary_df = pd.DataFrame(summary_data)
-    
+
     with pd.ExcelWriter("mathematical_sa_simulation_summary.xlsx") as writer:
         summary_df.to_excel(writer, index=False, sheet_name="Summary")
         stats_df.to_excel(writer, index=False, sheet_name="Statistical_Tests")
@@ -521,13 +528,13 @@ if __name__ == "__main__":
             'SA_Change_Workers': ['mean', 'std']
         }).round(6)
         scenario_stats.to_excel(writer, sheet_name="Scenario_Statistics")
-    
+
     print("\nSCENARIO PERFORMANCE COMPARISON:")
     print("-" * 60)
     scenario_means = summary_df.groupby('Scenario').agg({
         'Avg_SA_Change': ['mean', 'std', 'count']
     })['Avg_SA_Change']
-    
+
     for scenario in SCENARIOS:
         if scenario in scenario_means.index:
             mean_val = scenario_means.loc[scenario, 'mean']
@@ -539,10 +546,10 @@ if __name__ == "__main__":
             print(f"  Components: {SCENARIOS[scenario]}")
             print(f"  Sample size: {int(count_val)}")
             print()
-    
+
     print("\nSTATISTICAL SIGNIFICANCE RESULTS:")
     print("=" * 60)
-    
+
     for role in ["All", "Director", "Manager", "Worker"]:
         print(f"\n{role.upper()} ROLE ANALYSIS:")
         print("-" * 40)
@@ -578,13 +585,13 @@ if __name__ == "__main__":
     significant_results = stats_df[stats_df['Significant'] == 'Yes']
     total_tests = len(stats_df)
     significant_count = len(significant_results)
-    
+
     print(f"\nSUMMARY:")
     print("=" * 30)
     print(f"Total statistical tests performed: {total_tests}")
     print(f"Statistically significant results: {significant_count}")
     print(f"Percentage significant: {(significant_count/total_tests)*100:.1f}%")
-    
+
     if significant_count > 0:
         print(f"\nSignificant findings:")
         for _, row in significant_results.iterrows():
@@ -595,10 +602,10 @@ if __name__ == "__main__":
                 print(f"  {role} - {test}: F = {row['F_Statistic']:.4f}, p = {p_val:.6f}")
             else:
                 print(f"  {role} - {test}: t = {row['T_Statistic']:.4f}, p = {p_val:.6f}")
-    
+
     print(f"\nDynamic trust and communication simulation completed.")
     print(f"Results saved to 'mathematical_sa_simulation_summary.xlsx'")
-    
+
     print(f"\nTHEORETICAL PREDICTIONS:")
     print("-" * 30)
     print("Based on enhanced mathematical formulation, expected SA ranking:")
@@ -606,7 +613,7 @@ if __name__ == "__main__":
     print("2. Scenario 2 (High - P+C with adaptive communication)")
     print("3. Scenario 4 (Variable - Role-dependent complexity with dynamic authority)")
     print("4. Scenario 1 (Baseline - P only with static structure)")
-    
+
     print(f"\nACTUAL RESULTS (mean SA change):")
     print("-" * 30)
     actual_means = []
@@ -614,17 +621,13 @@ if __name__ == "__main__":
         if scenario in scenario_means.index:
             mean_val = scenario_means.loc[scenario, 'mean']
             actual_means.append((scenario, mean_val))
-    
+
     actual_means.sort(key=lambda x: x[1], reverse=True)
     for i, (scenario, mean_val) in enumerate(actual_means, 1):
         components = SCENARIOS[scenario]
-        comp_str = "+".join([list(components[role])[0] if len(set().union(*components.values())) == 1 
-                           else "+".join(sorted(set().union(*components.values()))) 
-                           for role in components][0:1])
-        if len(set().union(*components.values())) > 1:
-            comp_str = "+".join(sorted(set().union(*components.values())))
+        comp_str = "+".join(sorted(set().union(*components.values())))
         print(f"{i}. Scenario {scenario}: {mean_val:.6f} ({comp_str})")
-    
+
     print(f"\n" + "="*60)
     print("DYNAMIC TRUST AND COMMUNICATION SIMULATION COMPLETED")
     print("="*60)
